@@ -6,10 +6,30 @@ import sys
 # Determine the current directory where the script is running
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Define directory variables
-manifest_dir = os.path.join(os.path.expanduser('~'), '.ollama', 'models', 'manifests', 'registry.ollama.ai')
-blob_dir = os.path.join(os.path.expanduser('~'), '.ollama', 'models', 'blobs')
-outputModels_dir = os.path.join(current_dir, 'Output')  # Updated to use the current directory
+
+# Prompt user for directory choices
+def prompt_directories():
+    print("\nDirectory Setup:\n")
+    print("1. Use default directories\n2. Enter custom directories")
+    while True:
+        choice = input("Choose directory setup (1=default, 2=custom): ").strip()
+        if choice == '1':
+            manifest_dir = os.path.join(os.path.expanduser('~'), '.ollama', 'models', 'manifests', 'registry.ollama.ai')
+            blob_dir = os.path.join(os.path.expanduser('~'), '.ollama', 'models', 'blobs')
+            outputModels_dir = os.path.join(current_dir, 'Output')
+            break
+        elif choice == '2':
+            manifest_dir = input("Enter manifest directory path: ").strip()
+            blob_dir = input("Enter blob directory path: ").strip()
+            outputModels_dir = input("Enter output models directory path: ").strip()
+            break
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+    return manifest_dir, blob_dir, outputModels_dir
+
+# Set directory variables based on user input
+manifest_dir, blob_dir, outputModels_dir = prompt_directories()
+
 
 # Print base directories to confirm variables
 print("\nOllama To GGUF\n")
@@ -18,7 +38,7 @@ print(f"Manifest Directory: {manifest_dir}")
 print(f"Blob Directory: {blob_dir}")
 print(f"Output Models Directory: {outputModels_dir}")
 
-# Ensure public models directory exists or create it
+# Ensure output models directory exists or create it
 if not os.path.exists(outputModels_dir):
     os.makedirs(outputModels_dir)
     print("Output Models Directory Created.")
@@ -166,41 +186,44 @@ def main():
             break
 
         print("\nAvailable Ollama Models to Convert:\n")
+
         for index, manifest_path in enumerate(manifest_locations, start=1):
             modelName = os.path.basename(os.path.dirname(manifest_path))
             manifest_filename = os.path.basename(manifest_path)
-            
+
             # Load the manifest file to get the quantization type and layers
             with open(manifest_path) as f_obj:
                 obj = json.load(f_obj)
-            
+
             config = obj.get('config')
             if not config:
                 print(f"{index}. {modelName} (Manifest: {manifest_filename}, Quantization: Unknown, Size: Unknown)")
                 continue
-            
+
             digest = config.get('digest')
             if not digest:
                 print(f"{index}. {modelName} (Manifest: {manifest_filename}, Quantization: Unknown, Size: Unknown)")
                 continue
-            
+
             sha_value = digest.split(':')[-1]
             sha256_value = f'sha256-{sha_value}'
             sha_file = os.sep.join([blob_dir, str(sha256_value)])
-            
+
             # Load configuration data about this specific SHA value
             try:
                 with open(sha_file) as f_model_config_obj:
                     config_data = json.load(f_model_config_obj)
-                
                 modelQuant = config_data.get('file_type', 'Unknown')
             except Exception as e:
                 modelQuant = 'Unknown'
-            
-            layers = obj.get('layers', [])
-            model_size = get_model_size(layers, blob_dir)
-            model_size_str = f"{model_size / (1024 * 1024):.2f} MB" if model_size > 0 else "Unknown"
-            
+
+            layers = obj.get('layers')
+            if not isinstance(layers, list):
+                model_size_str = "Unknown"
+            else:
+                model_size = get_model_size(layers, blob_dir)
+                model_size_str = f"{model_size / (1024 * 1024):.2f} MB" if model_size > 0 else "Unknown"
+
             print(f"{index}. {modelName} (Manifest: {manifest_filename}, Quantization: {modelQuant}, Size: {model_size_str})")
 
         try:
